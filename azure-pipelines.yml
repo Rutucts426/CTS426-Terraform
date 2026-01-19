@@ -60,7 +60,7 @@ stages:
             $subId = az account show --query id -o tsv
             Write-Host "RG '$rgName' exists. Importing into Terraform state..."
             try {
-              terraform import azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName"
+              terraform import -input=false azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName"
               Write-Host "Import successful."
             }
             catch {
