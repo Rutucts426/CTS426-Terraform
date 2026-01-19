@@ -59,8 +59,7 @@ stages:
           if ($exists -eq "true") {
             $subId = az account show --query id -o tsv
             Write-Host "RG '$rgName' exists. Importing into Terraform state..."
-            terraform import `
-              azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName" -ErrorAction Continue
+            terraform import azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName" -ErrorAction Continue
           }
           else {
             Write-Host "RG '$rgName' does not exist. Terraform will create it."
