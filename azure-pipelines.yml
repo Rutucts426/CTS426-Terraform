@@ -60,11 +60,6 @@ stages:
             $subId = az account show --query id -o tsv
             Write-Host "RG '$rgName' exists. Importing into Terraform state..."
             terraform import `
-              -var="location=$(TF_LOCATION)" `
-              -var="rg_name=$(TF_RG_NAME)" `
-              -var="storage_account_name=$(TF_SA_NAME)" `
-              -var="container_name=$(TF_CONTAINER_NAME)" `
-              -var="env=$(TF_ENV)" `
               azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName" -ErrorAction Continue
           }
           else {
