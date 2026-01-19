@@ -113,16 +113,24 @@ stages:
                 $ErrorActionPreference = "Continue"
 
                 # Make sure backend is initialized (do this earlier in pipeline)
-                terraform import `
-                  -var="location=$(TF_LOCATION)" `
-                  -var="rg_name=$(TF_RG_NAME)" `
-                  -var="storage_account_name=$(TF_SA_NAME)" `
-                  -var="container_name=$(TF_CONTAINER_NAME)" `
-                  -var="env=$(TF_ENV)" `
-                  azurerm_resource_group.rg `"/subscriptions/$(AZ_SUBSCRIPTION_ID)/resourceGroups/$(TF_RG_NAME)" `
-                  2>$null
-
-                exit 0
+                $rgName = "$(TF_RG_NAME)"
+                
+                # Check if RG exists in Azure
+                $exists = az group exists --name $rgName
+                if ($exists -eq "true") {
+                  $subId = az account show --query id -o tsv
+                  Write-Host "RG '$rgName' exists. Importing into Terraform state..."
+                  terraform import `
+                    -var="location=$(TF_LOCATION)" `
+                    -var="rg_name=$(TF_RG_NAME)" `
+                    -var="storage_account_name=$(TF_SA_NAME)" `
+                    -var="container_name=$(TF_CONTAINER_NAME)" `
+                    -var="env=$(TF_ENV)" `
+                    azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName"
+                }
+                else {
+                  Write-Host "RG '$rgName' does not exist. No import needed."
+                }
 
           - task: AzureCLI@2
             displayName: "Terraform apply (from plan)"
