@@ -58,8 +58,15 @@ stages:
           $exists = az group exists --name $rgName
           if ($exists -eq "true") {
             $subId = az account show --query id -o tsv
-            Write-Host "RG '$rgName' exists. Importing into Terraform state..."
-            try {
+            Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
+            
+            # Check if resource already exists in state
+            $stateCheck = terraform state show azurerm_resource_group.rg 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "RG already managed by Terraform. Skipping import."
+            }
+            else {
+              Write-Host "Importing RG into Terraform state..."
               terraform import -lock=false -input=false `
                 -var="location=$(TF_LOCATION)" `
                 -var="rg_name=$(TF_RG_NAME)" `
@@ -67,10 +74,13 @@ stages:
                 -var="container_name=$(TF_CONTAINER_NAME)" `
                 -var="env=$(TF_ENV)" `
                 azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName"
-              Write-Host "Import successful."
-            }
-            catch {
-              Write-Host "Import failed or RG already imported: $_"
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Import successful."
+              }
+              else {
+                Write-Host "Import failed with exit code $LASTEXITCODE"
+                exit 1
+              }
             }
           }
           else {
