@@ -46,13 +46,17 @@ stages:
       displayName: "Terraform validate"
 
     - task: AzureCLI@2
-      displayName: "Terraform import RG if exists"
+      displayName: "Terraform import RG and SA if exists"
       inputs:
         azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
-          $rgName = "$(TF_RG_NAME)"
+          $rgName = "$(TF_RG_NAME)".Trim()
+          $saName = "$(TF_SA_NAME)".Trim()
+          $location = "$(TF_LOCATION)".Trim()
+          $containerName = "$(TF_CONTAINER_NAME)".Trim()
+          $env = "$(TF_ENV)".Trim()
           
           # Check if RG exists in Azure
           $exists = az group exists --name $rgName
@@ -60,7 +64,7 @@ stages:
             $subId = az account show --query id -o tsv
             Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
             
-            # Check if resource already exists in state
+            # Check if RG resource already exists in state
             $stateCheck = terraform state show azurerm_resource_group.rg 2>&1
             if ($LASTEXITCODE -eq 0) {
               Write-Host "RG already managed by Terraform. Skipping import."
@@ -68,23 +72,50 @@ stages:
             else {
               Write-Host "Importing RG into Terraform state..."
               terraform import -lock=false -input=false `
-                -var="location=$(TF_LOCATION)" `
-                -var="rg_name=$(TF_RG_NAME)" `
-                -var="storage_account_name=$(TF_SA_NAME)" `
-                -var="container_name=$(TF_CONTAINER_NAME)" `
-                -var="env=$(TF_ENV)" `
+                -var="location=$location" `
+                -var="rg_name=$rgName" `
+                -var="storage_account_name=$saName" `
+                -var="container_name=$containerName" `
+                -var="env=$env" `
                 azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName"
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "Import successful."
-              }
-              else {
-                Write-Host "Import failed with exit code $LASTEXITCODE"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "RG import failed with exit code $LASTEXITCODE"
                 exit 1
               }
             }
           }
           else {
             Write-Host "RG '$rgName' does not exist. Terraform will create it."
+          }
+          
+          # Check if Storage Account exists in Azure
+          $saExists = az storage account exists --name $saName --resource-group $rgName --query exists -o tsv 2>/dev/null
+          if ($saExists -eq "true") {
+            Write-Host "Storage Account '$saName' exists. Checking if already in Terraform state..."
+            
+            # Check if SA resource already exists in state
+            $saStateCheck = terraform state show azurerm_storage_account.sa 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Storage Account already managed by Terraform. Skipping import."
+            }
+            else {
+              Write-Host "Importing Storage Account into Terraform state..."
+              $saId = "/subscriptions/$subId/resourceGroups/$rgName/providers/Microsoft.Storage/storageAccounts/$saName"
+              terraform import -lock=false -input=false `
+                -var="location=$location" `
+                -var="rg_name=$rgName" `
+                -var="storage_account_name=$saName" `
+                -var="container_name=$containerName" `
+                -var="env=$env" `
+                azurerm_storage_account.sa "$saId"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Storage Account import failed with exit code $LASTEXITCODE"
+                exit 1
+              }
+            }
+          }
+          else {
+            Write-Host "Storage Account '$saName' does not exist. Terraform will create it."
           }
 
     - task: AzureCLI@2
@@ -94,13 +125,19 @@ stages:
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
+          $location = "$(TF_LOCATION)".Trim()
+          $rgName = "$(TF_RG_NAME)".Trim()
+          $saName = "$(TF_SA_NAME)".Trim()
+          $containerName = "$(TF_CONTAINER_NAME)".Trim()
+          $env = "$(TF_ENV)".Trim()
+          
           terraform plan `
             -out=tfplan `
-            -var="location=$(TF_LOCATION)" `
-            -var="rg_name=$(TF_RG_NAME)" `
-            -var="storage_account_name=$(TF_SA_NAME)" `
-            -var="container_name=$(TF_CONTAINER_NAME)" `
-            -var="env=$(TF_ENV)"
+            -var="location=$location" `
+            -var="rg_name=$rgName" `
+            -var="storage_account_name=$saName" `
+            -var="container_name=$containerName" `
+            -var="env=$env"
 
     - publish: tfplan
       artifact: tfplan
