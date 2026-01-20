@@ -95,8 +95,15 @@ stages:
             Write-Host "Storage Account '$saName' exists. Checking if already in Terraform state..."
             
             # Check if SA resource already exists in state
-            terraform state show azurerm_storage_account.sa *>$null
-            $saInState = $LASTEXITCODE -eq 0
+            $saInState = $false
+            try {
+              terraform state show azurerm_storage_account.sa *>$null
+              $saInState = $true
+            }
+            catch {
+              $saInState = $false
+            }
+            
             if ($saInState) {
               Write-Host "Storage Account already managed by Terraform. Skipping import."
             }
