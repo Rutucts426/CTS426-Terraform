@@ -27,15 +27,20 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform Init (Remote State)"
       inputs:
-        azureSubscription: "SC-Azure-426Terraform"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
+          $tfstateRg = "$(TFSTATE_RG)".Trim()
+          $tfstateStorage = "$(TFSTATE_STORAGE)".Trim()
+          $tfstateContainer = "$(TFSTATE_CONTAINER)".Trim()
+          $tfstateKey = "$(TFSTATE_KEY)".Trim()
+          
           terraform init `
-            -backend-config="resource_group_name=$(TFSTATE_RG)" `
-            -backend-config="storage_account_name=$(TFSTATE_STORAGE)" `
-            -backend-config="container_name=$(TFSTATE_CONTAINER)" `
-            -backend-config="key=$(TFSTATE_KEY)"
+            -backend-config="resource_group_name=$tfstateRg" `
+            -backend-config="storage_account_name=$tfstateStorage" `
+            -backend-config="container_name=$tfstateContainer" `
+            -backend-config="key=$tfstateKey"
 
     - powershell: |
         terraform fmt -check
@@ -48,7 +53,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform import RG and SA if exists"
       inputs:
-        azureSubscription: "SC-Azure-426Terraform"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -65,8 +70,15 @@ stages:
             Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
             
             # Check if RG resource already exists in state
-            & { terraform state show azurerm_resource_group.rg 2>&1 | Out-Null }
-            $rgExists = $?
+            $rgExists = $false
+            try {
+              terraform state show azurerm_resource_group.rg *>$null
+              $rgExists = $true
+            }
+            catch {
+              $rgExists = $false
+            }
+            
             if ($rgExists) {
               Write-Host "RG already managed by Terraform. Skipping import."
             }
@@ -130,7 +142,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform plan"
       inputs:
-        azureSubscription: "SC-Azure-426Terraform"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -182,7 +194,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Terraform Init (Remote State)"
             inputs:
-              azureSubscription: "SC-Azure-426Terraform"
+              azureSubscription: "SC-Azure-Terraform426-16"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
@@ -211,7 +223,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Terraform apply (from plan)"
             inputs:
-              azureSubscription: "SC-Azure-426Terraform"
+              azureSubscription: "SC-Azure-Terraform426-16"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
@@ -232,3 +244,8 @@ stages:
                 
                 Write-Host "Applying plan from $tfplanFile"
                 terraform apply -auto-approve "$tfplanFile"
+                
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "ERROR: Terraform apply failed with exit code $LASTEXITCODE"
+                  exit 1
+                }
