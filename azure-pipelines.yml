@@ -65,8 +65,8 @@ stages:
             Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
             
             # Check if RG resource already exists in state
-            terraform state show azurerm_resource_group.rg *>$null
-            $rgExists = $LASTEXITCODE -eq 0
+            & { terraform state show azurerm_resource_group.rg 2>&1 | Out-Null }
+            $rgExists = $?
             if ($rgExists) {
               Write-Host "RG already managed by Terraform. Skipping import."
             }
