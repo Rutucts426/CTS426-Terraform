@@ -214,7 +214,7 @@ stages:
                 
                 if (-Not (Test-Path $tfplanFile)) {
                   Write-Host "ERROR: tfplan file not found at $tfplanFile"
-                  Write-Host "Contents of $tfplanDir:"
+                  Write-Host "Contents of ${tfplanDir}:"
                   Get-ChildItem -Path $tfplanDir
                   exit 1
                 }
