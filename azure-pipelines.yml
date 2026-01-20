@@ -65,8 +65,9 @@ stages:
             Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
             
             # Check if RG resource already exists in state
-            terraform state show azurerm_resource_group.rg 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
+            terraform state show azurerm_resource_group.rg *>$null
+            $rgExists = $LASTEXITCODE -eq 0
+            if ($rgExists) {
               Write-Host "RG already managed by Terraform. Skipping import."
             }
             else {
@@ -94,8 +95,9 @@ stages:
             Write-Host "Storage Account '$saName' exists. Checking if already in Terraform state..."
             
             # Check if SA resource already exists in state
-            terraform state show azurerm_storage_account.sa 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
+            terraform state show azurerm_storage_account.sa *>$null
+            $saInState = $LASTEXITCODE -eq 0
+            if ($saInState) {
               Write-Host "Storage Account already managed by Terraform. Skipping import."
             }
             else {
