@@ -65,7 +65,7 @@ stages:
             Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
             
             # Check if RG resource already exists in state
-            $stateCheck = terraform state show azurerm_resource_group.rg 2>&1
+            terraform state show azurerm_resource_group.rg 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) {
               Write-Host "RG already managed by Terraform. Skipping import."
             }
@@ -94,7 +94,7 @@ stages:
             Write-Host "Storage Account '$saName' exists. Checking if already in Terraform state..."
             
             # Check if SA resource already exists in state
-            $saStateCheck = terraform state show azurerm_storage_account.sa 2>&1
+            terraform state show azurerm_storage_account.sa 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) {
               Write-Host "Storage Account already managed by Terraform. Skipping import."
             }
@@ -168,6 +168,7 @@ stages:
 
           - download: current
             artifact: tfplan
+            displayName: "Download tfplan artifact"
 
           - task: AzureCLI@2
             displayName: "Terraform Init (Remote State)"
@@ -176,11 +177,16 @@ stages:
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
+                $tfstateRg = "$(TFSTATE_RG)".Trim()
+                $tfstateStorage = "$(TFSTATE_STORAGE)".Trim()
+                $tfstateContainer = "$(TFSTATE_CONTAINER)".Trim()
+                $tfstateKey = "$(TFSTATE_KEY)".Trim()
+                
                 terraform init `
-                  -backend-config="resource_group_name=$(TFSTATE_RG)" `
-                  -backend-config="storage_account_name=$(TFSTATE_STORAGE)" `
-                  -backend-config="container_name=$(TFSTATE_CONTAINER)" `
-                  -backend-config="key=$(TFSTATE_KEY)"
+                  -backend-config="resource_group_name=$tfstateRg" `
+                  -backend-config="storage_account_name=$tfstateStorage" `
+                  -backend-config="container_name=$tfstateContainer" `
+                  -backend-config="key=$tfstateKey"
 
           - task: AzureCLI@2
             displayName: "Terraform apply (from plan)"
@@ -189,4 +195,9 @@ stages:
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
-                terraform apply -auto-approve "$(Pipeline.Workspace)\tfplan\tfplan"
+                $tfplanPath = "$(Pipeline.Workspace)/tfplan"
+                if (-Not (Test-Path $tfplanPath)) {
+                  Write-Host "ERROR: tfplan file not found at $tfplanPath"
+                  exit 1
+                }
+                terraform apply -auto-approve "$tfplanPath"
