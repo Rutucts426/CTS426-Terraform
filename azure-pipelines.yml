@@ -27,7 +27,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform Init (Remote State)"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -48,7 +48,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform import RG if exists"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -74,7 +74,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform plan"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -119,7 +119,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Terraform Init (Remote State)"
             inputs:
-              azureSubscription: "SC-Azure-Terraform426"
+              azureSubscription: "SC-Azure-Terraform426-16"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
@@ -132,7 +132,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Terraform apply (from plan)"
             inputs:
-              azureSubscription: "SC-Azure-Terraform426"
+              azureSubscription: "SC-Azure-Terraform426-16"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
