@@ -27,7 +27,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform Init (Remote State)"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426-16"
+        azureSubscription: "SC-Azure-426Terraform"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -48,7 +48,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform import RG and SA if exists"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426-16"
+        azureSubscription: "SC-Azure-426Terraform"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -130,7 +130,7 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform plan"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426-16"
+        azureSubscription: "SC-Azure-426Terraform"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
@@ -182,7 +182,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Terraform Init (Remote State)"
             inputs:
-              azureSubscription: "SC-Azure-Terraform426-16"
+              azureSubscription: "SC-Azure-426Terraform"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
@@ -191,16 +191,27 @@ stages:
                 $tfstateContainer = "$(TFSTATE_CONTAINER)".Trim()
                 $tfstateKey = "$(TFSTATE_KEY)".Trim()
                 
-                terraform init `
+                Write-Host "Initializing Terraform with backend:"
+                Write-Host "  RG: $tfstateRg"
+                Write-Host "  Storage: $tfstateStorage"
+                Write-Host "  Container: $tfstateContainer"
+                Write-Host "  Key: $tfstateKey"
+                
+                terraform init -input=false `
                   -backend-config="resource_group_name=$tfstateRg" `
                   -backend-config="storage_account_name=$tfstateStorage" `
                   -backend-config="container_name=$tfstateContainer" `
                   -backend-config="key=$tfstateKey"
+                
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "ERROR: Terraform init failed"
+                  exit 1
+                }
 
           - task: AzureCLI@2
             displayName: "Terraform apply (from plan)"
             inputs:
-              azureSubscription: "SC-Azure-Terraform426-16"
+              azureSubscription: "SC-Azure-426Terraform"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
