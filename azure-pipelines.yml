@@ -204,9 +204,20 @@ stages:
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
-                $tfplanPath = "$(Pipeline.Workspace)/tfplan"
-                if (-Not (Test-Path $tfplanPath)) {
-                  Write-Host "ERROR: tfplan file not found at $tfplanPath"
+                $tfplanDir = "$(Pipeline.Workspace)/tfplan"
+                $tfplanFile = "$tfplanDir/tfplan"
+                
+                if (-Not (Test-Path $tfplanDir)) {
+                  Write-Host "ERROR: tfplan directory not found at $tfplanDir"
                   exit 1
                 }
-                terraform apply -auto-approve "$tfplanPath"
+                
+                if (-Not (Test-Path $tfplanFile)) {
+                  Write-Host "ERROR: tfplan file not found at $tfplanFile"
+                  Write-Host "Contents of $tfplanDir:"
+                  Get-ChildItem -Path $tfplanDir
+                  exit 1
+                }
+                
+                Write-Host "Applying plan from $tfplanFile"
+                terraform apply -auto-approve "$tfplanFile"
