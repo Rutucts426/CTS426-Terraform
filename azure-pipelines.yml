@@ -89,8 +89,8 @@ stages:
           }
           
           # Check if Storage Account exists in Azure
-          $saExists = az storage account exists --name $saName --resource-group $rgName --query exists -o tsv 2>$null
-          if ($saExists -eq "true") {
+          $saExists = az storage account show --name $saName --resource-group $rgName 2>$null
+          if ($saExists) {
             Write-Host "Storage Account '$saName' exists. Checking if already in Terraform state..."
             
             # Check if SA resource already exists in state
