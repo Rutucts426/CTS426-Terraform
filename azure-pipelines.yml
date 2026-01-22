@@ -27,15 +27,24 @@ stages:
     - task: AzureCLI@2
       displayName: "Terraform Init (Remote State)"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
+          $tfstateRg = "$(TFSTATE_RG)".Trim()
+          $tfstateStorage = "$(TFSTATE_STORAGE)".Trim()
+          $tfstateContainer = "$(TFSTATE_CONTAINER)".Trim()
+          $tfstateKey = "$(TFSTATE_KEY)".Trim()
+          
+          # Get storage account access key
+          $storageKey = az storage account keys list --resource-group $tfstateRg --account-name $tfstateStorage --query "[0].value" -o tsv
+          
           terraform init `
-            -backend-config="resource_group_name=$(TFSTATE_RG)" `
-            -backend-config="storage_account_name=$(TFSTATE_STORAGE)" `
-            -backend-config="container_name=$(TFSTATE_CONTAINER)" `
-            -backend-config="key=$(TFSTATE_KEY)"
+            -backend-config="resource_group_name=$tfstateRg" `
+            -backend-config="storage_account_name=$tfstateStorage" `
+            -backend-config="container_name=$tfstateContainer" `
+            -backend-config="key=$tfstateKey" `
+            -backend-config="access_key=$storageKey"
 
     - powershell: |
         terraform fmt -check
@@ -46,19 +55,114 @@ stages:
       displayName: "Terraform validate"
 
     - task: AzureCLI@2
-      displayName: "Terraform plan"
+      displayName: "Terraform import RG and SA if exists"
       inputs:
-        azureSubscription: "SC-Azure-Terraform426"
+        azureSubscription: "SC-Azure-Terraform426-16"
         scriptType: "ps"
         scriptLocation: "inlineScript"
         inlineScript: |
+          $rgName = "$(TF_RG_NAME)".Trim()
+          $saName = "$(TF_SA_NAME)".Trim()
+          $location = "$(TF_LOCATION)".Trim()
+          $containerName = "$(TF_CONTAINER_NAME)".Trim()
+          $env = "$(TF_ENV)".Trim()
+          
+          # Check if RG exists in Azure
+          $exists = az group exists --name $rgName
+          if ($exists -eq "true") {
+            $subId = az account show --query id -o tsv
+            Write-Host "RG '$rgName' exists. Checking if already in Terraform state..."
+            
+            # Check if RG resource already exists in state
+            $rgExists = $false
+            try {
+              terraform state show azurerm_resource_group.rg *>$null
+              $rgExists = $true
+            }
+            catch {
+              $rgExists = $false
+            }
+            
+            if ($rgExists) {
+              Write-Host "RG already managed by Terraform. Skipping import."
+            }
+            else {
+              Write-Host "Importing RG into Terraform state..."
+              terraform import -lock=false -input=false `
+                -var="location=$location" `
+                -var="rg_name=$rgName" `
+                -var="storage_account_name=$saName" `
+                -var="container_name=$containerName" `
+                -var="env=$env" `
+                azurerm_resource_group.rg "/subscriptions/$subId/resourceGroups/$rgName"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "RG import failed with exit code $LASTEXITCODE"
+                exit 1
+              }
+            }
+          }
+          else {
+            Write-Host "RG '$rgName' does not exist. Terraform will create it."
+          }
+          
+          # Check if Storage Account exists in Azure
+          $saExists = az storage account show --name $saName --resource-group $rgName 2>$null
+          if ($saExists) {
+            Write-Host "Storage Account '$saName' exists. Checking if already in Terraform state..."
+            
+            # Check if SA resource already exists in state
+            $saInState = $false
+            try {
+              terraform state show azurerm_storage_account.sa *>$null
+              $saInState = $true
+            }
+            catch {
+              $saInState = $false
+            }
+            
+            if ($saInState) {
+              Write-Host "Storage Account already managed by Terraform. Skipping import."
+            }
+            else {
+              Write-Host "Importing Storage Account into Terraform state..."
+              $saId = "/subscriptions/$subId/resourceGroups/$rgName/providers/Microsoft.Storage/storageAccounts/$saName"
+              terraform import -lock=false -input=false `
+                -var="location=$location" `
+                -var="rg_name=$rgName" `
+                -var="storage_account_name=$saName" `
+                -var="container_name=$containerName" `
+                -var="env=$env" `
+                azurerm_storage_account.sa "$saId"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Storage Account import failed with exit code $LASTEXITCODE"
+                exit 1
+              }
+            }
+          }
+          else {
+            Write-Host "Storage Account '$saName' does not exist. Terraform will create it."
+          }
+
+    - task: AzureCLI@2
+      displayName: "Terraform plan"
+      inputs:
+        azureSubscription: "SC-Azure-Terraform426-16"
+        scriptType: "ps"
+        scriptLocation: "inlineScript"
+        inlineScript: |
+          $location = "$(TF_LOCATION)".Trim()
+          $rgName = "$(TF_RG_NAME)".Trim()
+          $saName = "$(TF_SA_NAME)".Trim()
+          $containerName = "$(TF_CONTAINER_NAME)".Trim()
+          $env = "$(TF_ENV)".Trim()
+          
           terraform plan `
             -out=tfplan `
-            -var="location=$(TF_LOCATION)" `
-            -var="rg_name=$(TF_RG_NAME)" `
-            -var="storage_account_name=$(TF_SA_NAME)" `
-            -var="container_name=$(TF_CONTAINER_NAME)" `
-            -var="env=$(TF_ENV)"
+            -var="location=$location" `
+            -var="rg_name=$rgName" `
+            -var="storage_account_name=$saName" `
+            -var="container_name=$containerName" `
+            -var="env=$env"
 
     - publish: tfplan
       artifact: tfplan
@@ -89,46 +193,67 @@ stages:
 
           - download: current
             artifact: tfplan
+            displayName: "Download tfplan artifact"
 
           - task: AzureCLI@2
             displayName: "Terraform Init (Remote State)"
             inputs:
-              azureSubscription: "SC-Azure-Terraform426"
+              azureSubscription: "SC-Azure-Terraform426-16"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
-                terraform init `
-                  -backend-config="resource_group_name=$(TFSTATE_RG)" `
-                  -backend-config="storage_account_name=$(TFSTATE_STORAGE)" `
-                  -backend-config="container_name=$(TFSTATE_CONTAINER)" `
-                  -backend-config="key=$(TFSTATE_KEY)"
-
-          - task: AzureCLI@2
-            displayName: "Terraform import RG if exists (safe)"
-            inputs:
-              azureSubscription: "SC-Azure-Terraform426"
-              scriptType: "ps"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                $ErrorActionPreference = "Continue"
-
-                # Make sure backend is initialized (do this earlier in pipeline)
-                terraform import `
-                  -var="location=$(TF_LOCATION)" `
-                  -var="rg_name=$(TF_RG_NAME)" `
-                  -var="storage_account_name=$(TF_SA_NAME)" `
-                  -var="container_name=$(TF_CONTAINER_NAME)" `
-                  -var="env=$(TF_ENV)" `
-                  azurerm_resource_group.rg `"/subscriptions/$(AZ_SUBSCRIPTION_ID)/resourceGroups/$(TF_RG_NAME)" `
-                  2>$null
-
-                exit 0
+                $tfstateRg = "$(TFSTATE_RG)".Trim()
+                $tfstateStorage = "$(TFSTATE_STORAGE)".Trim()
+                $tfstateContainer = "$(TFSTATE_CONTAINER)".Trim()
+                $tfstateKey = "$(TFSTATE_KEY)".Trim()
+                
+                Write-Host "Initializing Terraform with backend:"
+                Write-Host "  RG: $tfstateRg"
+                Write-Host "  Storage: $tfstateStorage"
+                Write-Host "  Container: $tfstateContainer"
+                Write-Host "  Key: $tfstateKey"
+                
+                # Get storage account access key
+                $storageKey = az storage account keys list --resource-group $tfstateRg --account-name $tfstateStorage --query "[0].value" -o tsv
+                
+                terraform init -input=false `
+                  -backend-config="resource_group_name=$tfstateRg" `
+                  -backend-config="storage_account_name=$tfstateStorage" `
+                  -backend-config="container_name=$tfstateContainer" `
+                  -backend-config="key=$tfstateKey" `
+                  -backend-config="access_key=$storageKey"
+                
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "ERROR: Terraform init failed"
+                  exit 1
+                }
 
           - task: AzureCLI@2
             displayName: "Terraform apply (from plan)"
             inputs:
-              azureSubscription: "SC-Azure-Terraform426"
+              azureSubscription: "SC-Azure-Terraform426-16"
               scriptType: "ps"
               scriptLocation: "inlineScript"
               inlineScript: |
-                terraform apply -auto-approve "$(Pipeline.Workspace)\tfplan\tfplan"
+                $tfplanDir = "$(Pipeline.Workspace)/tfplan"
+                $tfplanFile = "$tfplanDir/tfplan"
+                
+                if (-Not (Test-Path $tfplanDir)) {
+                  Write-Host "ERROR: tfplan directory not found at $tfplanDir"
+                  exit 1
+                }
+                
+                if (-Not (Test-Path $tfplanFile)) {
+                  Write-Host "ERROR: tfplan file not found at $tfplanFile"
+                  Write-Host "Contents of ${tfplanDir}:"
+                  Get-ChildItem -Path $tfplanDir
+                  exit 1
+                }
+                
+                Write-Host "Applying plan from $tfplanFile"
+                terraform apply -auto-approve -lock=true "$tfplanFile"
+                
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "ERROR: Terraform apply failed with exit code $LASTEXITCODE"
+                  exit 1
+                }
