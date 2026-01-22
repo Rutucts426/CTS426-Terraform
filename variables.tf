@@ -11,8 +11,8 @@ variable "storage_account_name" {
 }
 
 variable "container_name" {
-   type = string
- }
+  type = string
+}
 
 variable "env" {
   type = string
