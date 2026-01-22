@@ -250,16 +250,10 @@ stages:
                   exit 1
                 }
                 
-                # Try to release any stale state locks
-                Write-Host "Attempting to clear stale state locks..."
-                terraform force-unlock -force $(terraform state list 2>&1 | Select-String "ID:" | ForEach-Object { $_ -replace '.*ID:\s+', '' } | Select-Object -First 1) 2>$null
-                
                 Write-Host "Applying plan from $tfplanFile"
                 terraform apply -auto-approve -lock=true "$tfplanFile"
                 
                 if ($LASTEXITCODE -ne 0) {
                   Write-Host "ERROR: Terraform apply failed with exit code $LASTEXITCODE"
-                  Write-Host "Attempting force-unlock as recovery..."
-                  terraform force-unlock -force $(terraform state list 2>&1 | Select-String "ID:" | ForEach-Object { $_ -replace '.*ID:\s+', '' } | Select-Object -First 1) 2>$null
                   exit 1
                 }
