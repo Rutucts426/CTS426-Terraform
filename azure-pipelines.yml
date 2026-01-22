@@ -36,11 +36,15 @@ stages:
           $tfstateContainer = "$(TFSTATE_CONTAINER)".Trim()
           $tfstateKey = "$(TFSTATE_KEY)".Trim()
           
+          # Get storage account access key
+          $storageKey = az storage account keys list --resource-group $tfstateRg --account-name $tfstateStorage --query "[0].value" -o tsv
+          
           terraform init `
             -backend-config="resource_group_name=$tfstateRg" `
             -backend-config="storage_account_name=$tfstateStorage" `
             -backend-config="container_name=$tfstateContainer" `
-            -backend-config="key=$tfstateKey"
+            -backend-config="key=$tfstateKey" `
+            -backend-config="access_key=$storageKey"
 
     - powershell: |
         terraform fmt -check
@@ -209,11 +213,15 @@ stages:
                 Write-Host "  Container: $tfstateContainer"
                 Write-Host "  Key: $tfstateKey"
                 
+                # Get storage account access key
+                $storageKey = az storage account keys list --resource-group $tfstateRg --account-name $tfstateStorage --query "[0].value" -o tsv
+                
                 terraform init -input=false `
                   -backend-config="resource_group_name=$tfstateRg" `
                   -backend-config="storage_account_name=$tfstateStorage" `
                   -backend-config="container_name=$tfstateContainer" `
-                  -backend-config="key=$tfstateKey"
+                  -backend-config="key=$tfstateKey" `
+                  -backend-config="access_key=$storageKey"
                 
                 if ($LASTEXITCODE -ne 0) {
                   Write-Host "ERROR: Terraform init failed"
