@@ -47,8 +47,8 @@ stages:
             -backend-config="access_key=$storageKey"
 
     - powershell: |
-        terraform fmt -check
-      displayName: "Terraform fmt (check)"
+        terraform fmt -recursive
+      displayName: "Terraform fmt (format)"
 
     - powershell: |
         terraform validate
